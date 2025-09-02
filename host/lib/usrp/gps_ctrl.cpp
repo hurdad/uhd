@@ -129,6 +129,18 @@ private:
         return (string_crc == calculated_crc);
     }
 
+    static std::string compute_nmea_checksum(const std::string& sentence) {
+        // Skip initial '$'
+        unsigned char checksum = 0;
+        for (size_t i = 1; i < sentence.size(); ++i) {
+            if (sentence[i] == '*') break;  // stop before existing checksum
+            checksum ^= static_cast<unsigned char>(sentence[i]);
+        }
+        std::stringstream ss;
+        ss << std::uppercase << std::hex << std::setw(2) << std::setfill('0') << (int)checksum;
+        return ss.str();
+    }
+
     void update_cache()
     {
         if (not gps_detected()) {
@@ -139,6 +151,8 @@ private:
         static const std::regex servo_regex("^\\d\\d-\\d\\d-\\d\\d.*$");
         static const std::regex gp_msg_regex("^\\$GP.*\\*[0-9A-F]{2}$");
         std::map<std::string, std::string> msgs;
+        // Buffer for multi-line GPGSV messages
+        static std::vector<std::string> gsv_buffer;
 
         // Get all GPSDO messages available
         // Creating a map here because we only want the latest of each message type
@@ -163,7 +177,52 @@ private:
                     msg, servo_regex, std::regex_constants::match_continuous)) {
                 msgs["SERVO"] = msg;
             } else if (std::regex_match(msg, gp_msg_regex) and is_nmea_checksum_ok(msg)) {
-                msgs[msg.substr(1, 5)] = msg;
+
+                // get type
+                std::string type = msg.substr(1, 5);
+
+                // Combine GPGSV messages
+                if (type == "GPGSV") {
+                    // Parse total messages and message number
+                    std::vector<std::string> parts;
+                    boost::split(parts, msg, boost::is_any_of(","));
+                    if (parts.size() >= 3) {
+                        int total_msgs = std::stoi(parts[1]);
+                        int msg_num    = std::stoi(parts[2]);
+
+                        // Initialize buffer if needed
+                        if (gsv_buffer.empty()) {
+                            gsv_buffer.resize(total_msgs);
+                        }
+
+                        // Store this line
+                        gsv_buffer[msg_num - 1] = msg;
+
+                        // Check if all lines received
+                        if (msg_num == total_msgs) {
+                            // Concatenate satellite data from all lines
+                            std::string combined = "$GPGSV";
+                            for (const auto& line : gsv_buffer) {
+                                std::vector<std::string> fields;
+                                boost::split(fields, line, boost::is_any_of(","));
+                                // Satellite data starts at index 4, ends before checksum
+                                for (size_t i = 4; i < fields.size() - 1; ++i) {
+                                    combined += "," + fields[i];
+                                }
+                            }
+                            // Compute checksum
+                            combined += "*" + compute_nmea_checksum(combined);
+                            msgs["GPGSV"] = combined;
+                            gsv_buffer.clear();
+                        }
+                    } else {
+                        UHD_LOGGER_WARNING("GPS")
+                            << UHD_FUNCTION << "(): Malformed GPGSV string: " << msg;
+                    }
+                } else {
+                    msgs[type] = msg;
+                }
+
             } else {
                 UHD_LOGGER_WARNING("GPS")
                     << UHD_FUNCTION << "(): Malformed GPSDO string: " << msg;
@@ -258,13 +317,13 @@ public:
     std::vector<std::string> get_sensors(void) override
     {
         std::vector<std::string> ret{
-            "gps_gpgga", "gps_gprmc", "gps_time", "gps_locked", "gps_servo"};
+            "gps_gpgga", "gps_gprmc", "gps_gpgsv", "gps_gpgsa","gps_time", "gps_locked", /*"gps_servo"*/};
         return ret;
     }
 
     uhd::sensor_value_t get_sensor(std::string key) override
     {
-        if (key == "gps_gpgga" or key == "gps_gprmc") {
+        if (key == "gps_gpgga" or key == "gps_gprmc" or key == "gps_gpgsv" or key =="gps_gpgsa") {
             return sensor_value_t(boost::to_upper_copy(key),
                 get_sentence(boost::to_upper_copy(key.substr(4, 8)),
                     GPS_NMEA_NORMAL_FRESHNESS,

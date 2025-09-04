@@ -147,7 +147,7 @@ private:
             return;
         }
 
-        const std::list<std::string> keys{"GPGGA", "GPRMC", "SERVO"};
+        const std::list<std::string> keys{"GPGGA", "GPRMC", "GPGSV", "GPGSA", "SERVO"};
         static const std::regex servo_regex("^\\d\\d-\\d\\d-\\d\\d.*$");
         static const std::regex gp_msg_regex("^\\$GP.*\\*[0-9A-F]{2}$");
         std::map<std::string, std::string> msgs;

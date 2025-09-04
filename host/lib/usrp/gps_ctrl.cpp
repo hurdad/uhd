@@ -200,21 +200,50 @@ private:
 
                         // Check if all lines received
                         if (msg_num == total_msgs) {
-                            // Concatenate satellite data from all lines
-                            std::string combined = "$GPGSV";
+                            if (gsv_buffer.empty()) return;
+
+                            // Parse first line to extract total_msgs, total_sats
+                            std::vector<std::string> first_fields;
+                            boost::split(first_fields, gsv_buffer.front(), boost::is_any_of(","));
+
+                            std::string total_msgs_str = first_fields[1];
+                            std::string total_sats_str = first_fields[3];
+
+                            // Build proper header
+                            std::string combined = "$GPGSV," + total_msgs_str + ",1," + total_sats_str;
+
+                            // Collect all satellite data
                             for (const auto& line : gsv_buffer) {
                                 std::vector<std::string> fields;
                                 boost::split(fields, line, boost::is_any_of(","));
-                                // Satellite data starts at index 4, ends before checksum
-                                for (size_t i = 4; i < fields.size() - 1; ++i) {
-                                    combined += "," + fields[i];
+
+                                // Extract only valid satellite chunks
+                                size_t last_field = fields.size();
+                                // Stop before checksum field if it exists
+                                size_t star_pos = fields.back().find('*');
+                                if (star_pos != std::string::npos) {
+                                    last_field = fields.size() - 1;
+                                    fields.back() = fields.back().substr(0, star_pos); // Clean up before adding
+                                }
+
+                                for (size_t i = 4; i < last_field; ++i) {
+                                    if (!fields[i].empty()) {
+                                        combined += "," + fields[i];
+                                    } else {
+                                        combined += ",";
+                                    }
                                 }
                             }
-                            // Compute checksum
-                            combined += "*" + compute_nmea_checksum(combined);
+
+                            // Compute checksum correctly (without $)
+                            std::string checksum = compute_nmea_checksum(combined.substr(1));
+                            combined += "*" + checksum;
+
+                            // Store and clear buffer
                             msgs["GPGSV"] = combined;
                             gsv_buffer.clear();
                         }
+
                     } else {
                         UHD_LOGGER_WARNING("GPS")
                             << UHD_FUNCTION << "(): Malformed GPGSV string: " << msg;

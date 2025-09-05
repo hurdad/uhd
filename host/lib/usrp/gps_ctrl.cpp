@@ -129,15 +129,18 @@ private:
         return (string_crc == calculated_crc);
     }
 
-    static std::string compute_nmea_checksum(const std::string& sentence) {
+    static std::string compute_nmea_checksum(const std::string& sentence)
+    {
         // Skip initial '$'
         unsigned char checksum = 0;
         for (size_t i = 1; i < sentence.size(); ++i) {
-            if (sentence[i] == '*') break;  // stop before existing checksum
+            if (sentence[i] == '*')
+                break; // stop before existing checksum
             checksum ^= static_cast<unsigned char>(sentence[i]);
         }
         std::stringstream ss;
-        ss << std::uppercase << std::hex << std::setw(2) << std::setfill('0') << (int)checksum;
+        ss << std::uppercase << std::hex << std::setw(2) << std::setfill('0')
+           << (int)checksum;
         return ss.str();
     }
 
@@ -177,7 +180,6 @@ private:
                     msg, servo_regex, std::regex_constants::match_continuous)) {
                 msgs["SERVO"] = msg;
             } else if (std::regex_match(msg, gp_msg_regex) and is_nmea_checksum_ok(msg)) {
-
                 // get type
                 std::string type = msg.substr(1, 5);
 
@@ -198,28 +200,30 @@ private:
                         // Store this line
                         gsv_buffer[msg_num - 1] = msg;
 
-                        std::cout << "Save gsv_buffer: index:" << msg_num - 1 << " msg:" << msg << std::endl;
-
                         // Check if all lines received
                         if (msg_num == total_msgs) {
-                            if (gsv_buffer.empty()) return;
+                            if (gsv_buffer.empty())
+                                return;
 
                             // Parse first line to extract total_msgs, total_sats
                             std::vector<std::string> first_fields;
-                            boost::split(first_fields, gsv_buffer.front(), boost::is_any_of(","));
+                            boost::split(
+                                first_fields, gsv_buffer.front(), boost::is_any_of(","));
 
                             std::string total_msgs_str = first_fields[1];
                             std::string total_sats_str = first_fields[3];
 
                             // Build proper header
-                            std::string combined = "$GPGSV," + total_msgs_str + ",1," + total_sats_str;
+                            std::string combined =
+                                "$GPGSV," + total_msgs_str + ",1," + total_sats_str;
 
                             // Collect all satellite data
                             for (const auto& line : gsv_buffer) {
-
                                 // trim off gps sentence checksum
-                                size_t      starPos = line.find('*');
-                                std::string nmea    = (starPos != std::string::npos) ? line.substr(0, starPos) : line;
+                                size_t starPos   = line.find('*');
+                                std::string nmea = (starPos != std::string::npos)
+                                                       ? line.substr(0, starPos)
+                                                       : line;
 
                                 std::vector<std::string> fields;
                                 boost::split(fields, nmea, boost::is_any_of(","));
@@ -227,15 +231,7 @@ private:
                                 // Extract only valid satellite chunks
                                 size_t last_field = fields.size();
 
-                                std::cout << "Processing: " << line << " fields.size: " << fields.size() << std::endl;
-
-                                // // Stop before checksum field if it exists
-                                // size_t star_pos = fields.back().find('*');
-                                // if (star_pos != std::string::npos) {
-                                //     last_field = fields.size() - 1;
-                                //     fields.back() = fields.back().substr(0, star_pos); // Clean up before adding
-                                // }
-
+                                // combine fields
                                 for (size_t i = 4; i < last_field; ++i) {
                                     if (!fields[i].empty()) {
                                         combined += "," + fields[i];
@@ -245,10 +241,9 @@ private:
                                 }
                             }
 
-                            std::cout << "combined: " << combined << std::endl;
-
                             // Compute checksum correctly (without $)
-                            std::string checksum = compute_nmea_checksum(combined.substr(1));
+                            std::string checksum =
+                                compute_nmea_checksum(combined.substr(1));
                             combined += "*" + checksum;
 
                             // Store and clear buffer
@@ -358,13 +353,15 @@ public:
     std::vector<std::string> get_sensors(void) override
     {
         std::vector<std::string> ret{
-            "gps_gpgga", "gps_gprmc", "gps_gpgsv", "gps_gpgsa","gps_time", "gps_locked", /*"gps_servo"*/};
+            "gps_gpgga", "gps_gprmc", "gps_gpgsv", "gps_gpgsa", "gps_time", "gps_locked",
+            /*"gps_servo"*/};
         return ret;
     }
 
     uhd::sensor_value_t get_sensor(std::string key) override
     {
-        if (key == "gps_gpgga" or key == "gps_gprmc" or key == "gps_gpgsv" or key =="gps_gpgsa") {
+        if (key == "gps_gpgga" or key == "gps_gprmc" or key == "gps_gpgsv"
+            or key == "gps_gpgsa") {
             return sensor_value_t(boost::to_upper_copy(key),
                 get_sentence(boost::to_upper_copy(key.substr(4, 8)),
                     GPS_NMEA_NORMAL_FRESHNESS,

@@ -198,6 +198,8 @@ private:
                         // Store this line
                         gsv_buffer[msg_num - 1] = msg;
 
+                        std::cout << "Save gsv_buffer: index:" << msg_num - 1 << " msg:" << msg << std::endl;
+
                         // Check if all lines received
                         if (msg_num == total_msgs) {
                             if (gsv_buffer.empty()) return;
@@ -214,17 +216,25 @@ private:
 
                             // Collect all satellite data
                             for (const auto& line : gsv_buffer) {
+
+                                // trim off gps sentence checksum
+                                size_t      starPos = line.find('*');
+                                std::string nmea    = (starPos != std::string::npos) ? line.substr(0, starPos) : line;
+
                                 std::vector<std::string> fields;
-                                boost::split(fields, line, boost::is_any_of(","));
+                                boost::split(fields, nmea, boost::is_any_of(","));
 
                                 // Extract only valid satellite chunks
                                 size_t last_field = fields.size();
-                                // Stop before checksum field if it exists
-                                size_t star_pos = fields.back().find('*');
-                                if (star_pos != std::string::npos) {
-                                    last_field = fields.size() - 1;
-                                    fields.back() = fields.back().substr(0, star_pos); // Clean up before adding
-                                }
+
+                                std::cout << "Processing: " << line << " fields.size: " << fields.size() << std::endl;
+
+                                // // Stop before checksum field if it exists
+                                // size_t star_pos = fields.back().find('*');
+                                // if (star_pos != std::string::npos) {
+                                //     last_field = fields.size() - 1;
+                                //     fields.back() = fields.back().substr(0, star_pos); // Clean up before adding
+                                // }
 
                                 for (size_t i = 4; i < last_field; ++i) {
                                     if (!fields[i].empty()) {
@@ -234,6 +244,8 @@ private:
                                     }
                                 }
                             }
+
+                            std::cout << "combined: " << combined << std::endl;
 
                             // Compute checksum correctly (without $)
                             std::string checksum = compute_nmea_checksum(combined.substr(1));

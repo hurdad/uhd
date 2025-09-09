@@ -161,7 +161,7 @@ private:
             return;
         }
 
-        //const std::list<std::string> keys{"GPGGA", "GPRMC", "GPGSV", "GPGSA", "SERVO"};
+        // const std::list<std::string> keys{"GPGGA", "GPRMC", "GPGSV", "GPGSA", "SERVO"};
         static const std::regex servo_regex("^\\d\\d-\\d\\d-\\d\\d.*$");
         static const std::regex gp_msg_regex("^\\$GP.*\\*[0-9A-F]{2}$");
         std::map<std::string, std::string> msgs;
@@ -370,7 +370,8 @@ public:
     // return a list of supported sensors
     std::vector<std::string> get_sensors(void) override
     {
-        return {"gps_gpgga", "gps_gprmc", "gps_time", "gps_locked", /*"gps_servo"*/};
+        return {"gps_gpgga", "gps_gprmc", "gps_gpgsv", "gps_time", "gps_locked",
+            /*"gps_servo"*/};
     }
 
     uhd::sensor_value_t get_sensor(std::string key) override
